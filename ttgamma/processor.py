@@ -256,7 +256,12 @@ class TTGammaProcessor(processor.ProcessorABC):
                 systematic_axis,
                 storage="weight",
             ),
-            "photon_eta": hist.Hist( # FIXME 3
+            "photon_eta": hist.Hist( # FIXME 3 done
+                eta_axis,
+                phoCategory_axis,
+                lep_axis,
+                systematic_axis,
+                storage="weight",
             ),
             "photon_chIso": hist.Hist(
                 chIso_axis,
@@ -396,9 +401,11 @@ class TTGammaProcessor(processor.ProcessorABC):
             elif shift_syst == "JERDown":
                 jets = corrected_jets.JER.down
             elif shift_syst == "JESUp":
-                jets = ...  #FIXME 4
+                #jets = ...  #FIXME 4
+                jets = corrected_jets.JES.up
             elif shift_syst == "JESDown":
-                jets = ...  #FIXME 4
+                #jets = ...  #FIXME 4
+                jets = corrected_jets.JES.down
             else:
                 # either nominal or some shift systematic unrelated to jets
                 jets = corrected_jets
@@ -585,8 +592,10 @@ class TTGammaProcessor(processor.ProcessorABC):
                 datasetFull = "TTGamma_SingleLept_2016"
     
             puWeight = puLookup[datasetFull](events.Pileup.nTrueInt)
-            puWeight_Up = ...  # solution to FIXME 4
-            puWeight_Down = ...  # solution to FIXME 4
+            #puWeight_Up = ...  # solution to FIXME 4
+            #puWeight_Down = ...  # solution to FIXME 4
+            puWeight_Up = puLookup_Up[datasetFull](events.Pileup.nTrueInt) 
+            puWeight_Down = puLookup_Down[datasetFull](events.Pileup.nTrueInt)
 
             # add the puWeight and it's uncertainties to the weights container
             weights.add(
@@ -659,8 +668,15 @@ class TTGammaProcessor(processor.ProcessorABC):
 
             eleSF = ak.prod((eleID * eleRECO), axis=-1)
             eleSF_up = ak.prod(((eleID + eleIDerr) * (eleRECO + eleRECOerr)), axis=-1)
-            eleSF_down = ...  # solution to FIXME 4
-            weights.add(...)  # solution to FIXME 4
+            #eleSF_down = ...  # solution to FIXME 4
+            #weights.add(...)  # solution to FIXME 4
+            eleSF_down = ak.prod(((eleID - eleIDerr) * (eleRECO - eleRECOerr)), axis=-1)
+            weights.add(
+                    "eleEffWeight",
+                    eleSF,
+                    eleSF_up,
+                    eleSF_down
+                    )
 
             muID = mu_id_sf(tightMuons.eta, tightMuons.pt)
             muIDerr = mu_id_err(tightMuons.eta, tightMuons.pt)
@@ -674,9 +690,14 @@ class TTGammaProcessor(processor.ProcessorABC):
                 (muID + muIDerr) * (muIso + muIsoerr) * (muTrig + muTrigerr), axis=-1
             )
             muSF_down = ak.prod(
-                ...
+                (muID - muIDerr) * (muIso - muIsoerr) * (muTrig - muTrigerr), axis=-1
             )  # solution to FIXME 4
-            weights.add(...)  # solution to FIXME 4
+            weights.add(
+                    "muEffWeight",
+                    muSF,
+                    muSF_up,
+                    muSF_down
+                    )  # solution to FIXME 4
 
             # This section sets up some of the weight shifts related to theory uncertainties
             # in some samples, generator systematics are not available, in those case the systematic weights of 1. are used
@@ -770,7 +791,17 @@ class TTGammaProcessor(processor.ProcessorABC):
                     "muEffWeightUp",
                     "muEffWeightDown",
                     "eleEffWeightUp",
-                    "",  # solution to FIXME 4
+                    "eleEffWeightDown",  # solution to FIXME 4
+                    "ISRWeightUp",
+                    "ISRWeightDown",
+                    "PDFWeightUp",
+                    "PDFWeightDown",
+                    "FSRWeightUp",
+                    "FSRWeightDown",                            #SHOULD THE START BE CAPITALIZED FOR FSR ISR PDF
+                    "puWeightUp",
+                    "puWeightDown",
+                    "btagWeightUp",
+                    "btagWeightDown",
                 ]
 
                 if "TTGamma" in dataset:
@@ -807,10 +838,8 @@ class TTGammaProcessor(processor.ProcessorABC):
 
                 # use the selection.all() method to select events passing
                 # the lepton selection, 4-jet 1-tag jet selection, and either the one-photon or loose-photon selections
-                phosel = selection.all(lepSel, "jetSel_4j1b", "onePho")
-                phoselLoose = selection.all(
-                  ...
-                )  # solution to FIXME 3
+                phosel = selection.all(lepSel, "jetSel_4j1b", "phoSel_1tight",)
+                phoselLoose = selection.all(lepSel, "jetSel_4j1b", "phoSel_1loose")  # solution to FIXME 3 done
 
                 # fill photon_pt and photon_eta, using the leadingPhoton array, from events passing the phosel selection
                 # Make sure to apply the correct mask to the category, weight, and photon pt or eta
@@ -827,15 +856,30 @@ class TTGammaProcessor(processor.ProcessorABC):
 
                 # fill eta histogram, for events passing the phosel selection
                 output["photon_eta"].fill(
-                ) # solution to FIXME 3
+                    eta=leadingPhoton.eta[phosel],
+                    category=phoCategory[phosel],
+                    lepFlavor=lepton,
+                    systematic=syst,
+                    weight=evtWeight[phosel],
+                ) # solution to FIXME 3 done
 
                 # fill M3 histogram, for events passing the phosel selection
                 output["M3"].fill(
-                ) # solution to FIXME 3
+                    M3=leadingPhoton.M3[phosel],
+                    category=phoCategory[phosel],
+                    lepFlavor=lepton,
+                    systematic=syst,
+                    weight=evtWeight[phosel],
+                ) # solution to FIXME 3 done
 
                 # fill photon_chIso histogram, using the loosePhotons array (photons passing all cuts, except the charged hadron isolation cuts)
                 output["photon_chIso"].fill(
-                ) # solution to FIXME 3
+                    chIso=leadingPhotonLoose.chIso[phoselLoose],
+                    category=phoCategory[phoselLoose],
+                    lepFlavor=lepton,
+                    systematic=syst,
+                    weight=evtWeight[phoselLoose],
+                ) # solution to FIXME 3 done
 
             # use the selection.all() method to select events passing the eleSel or muSel selection,
             # and the 3-jet 0-btag selection, and have exactly one photon
@@ -847,7 +891,12 @@ class TTGammaProcessor(processor.ProcessorABC):
             for lepton in phosel_3j0t.keys():
                 mask = phosel_3j0t[lepton]
                 output["photon_lepton_mass_3j0t"].fill(
-                ) # solution to FIXME 3
+                    mass=gammaMasses[lepton][mask],
+                    category=phoCategory[mask],
+                    lepFlavor=lepton,
+                    systematic=syst,
+                    weight=evtWeight[mask],
+                ) # solution to FIXME 3 done
 
 
         if shift_syst is None:
